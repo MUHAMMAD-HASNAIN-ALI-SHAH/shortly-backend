@@ -137,7 +137,7 @@ const generateShortUrlForLink = async (req, res) => {
     }
 
     const shortId = encodeBase62(nextIndex);
-    const fullShortUrl = `${process.env.BACKEND_URI}/s/${shortId}`;
+    const fullShortUrl = `${process.env.FRONTEND_URL}/s/${shortId}`;
 
     const newUrl = await Url.create({
       index: nextIndex,
@@ -272,12 +272,31 @@ const getLimit = async (req, res) => {
       return res.status(404).json({ msg: "Plan not found" });
     }
 
-    console.log("Plan details:", plan);
     res.status(200).json({
       urls: plan.urls,
       qrCodes: plan.qrCodes,
       expiresAt: plan.expiresAt,
     });
+  } catch (err) {
+    console.error("Error fetching URL code limit:", err);
+    res.status(500).json({ msg: "Server error" });
+  }
+};
+
+const redirect = async (req, res) => {
+  try {
+    const { index } = req.query;
+    if (!index) return res.status(400).json({ msg: "Missing Link" });
+
+    const getIndex = decodeBase62(index);
+    if (getIndex < 100) {
+      return res.status(400).json({ msg: "Invalid Link" });
+    }
+
+    const url = await Url.findOne({ index: getIndex, type: "short-url" });
+    if (!url) return res.status(404).json({ msg: "URL not found" });
+
+    res.status(200).json({ originalUrl: url.originalUrl });
   } catch (err) {
     console.error("Error fetching URL code limit:", err);
     res.status(500).json({ msg: "Server error" });
@@ -293,4 +312,5 @@ module.exports = {
   deleteUrlOrQr,
   getUserLinks,
   getLimit,
+  redirect,
 };

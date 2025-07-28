@@ -2,7 +2,7 @@ const { default: axios } = require("axios");
 const User = require("../models/user.model");
 const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
-const { sendCode } = require("../config/email");
+const { sendCode, getResetPasswordEmail } = require("../config/email");
 const Code = require("../models/code.schema");
 const Plan = require("../models/plan.model");
 
@@ -278,7 +278,7 @@ const changePassword = async (req, res) => {
       return res.status(400).json({ msg: "Email not found" });
     }
 
-    if(!user.password) {
+    if (!user.password) {
       return res.status(400).json({ msg: "Invalid current password" });
     }
 
@@ -299,6 +299,100 @@ const changePassword = async (req, res) => {
   }
 };
 
+const requestPasswordReset = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // Validate input
+    if (!email) return res.status(400).json({ msg: "Email is required" });
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ msg: "User not found" });
+
+    // Generate 4-digit numeric code
+    const code = Math.floor(1000 + Math.random() * 9000).toString();
+
+    // delete previous code if exists
+    await Code.deleteMany({ userId: user._id });
+
+    // Store code and 10-minute expiry
+    await Code.create({
+      userId: user._id,
+      code,
+      email,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    // Send email
+    await transporter.sendMail({
+      from: `"Shortly" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Reset Your Password - Shortly",
+      html: getResetPasswordEmail(user._id, code),
+    });
+
+    return res.status(200).json({ msg: "Reset code sent to your email." });
+  } catch (err) {
+    console.error("Error in requestPasswordReset:", err.message);
+    return res.status(500).json({ msg: "Internal Server Error" });
+  }
+};
+
+const checkPasswordResetDetails = async (req, res) => {
+  try {
+    const { userId, code } = req.query;
+
+    // Validate input
+    if (!userId || !code) {
+      return res.status(400).json({ msg: "User ID and code are required" });
+    }
+
+    const resetCode = await Code.findOne({ userId, code });
+    if (!resetCode) {
+      return res.status(404).json({ msg: "Invalid or expired reset link" });
+    }
+
+    if (resetCode.expiresAt < new Date()) {
+      return res.status(400).json({ msg: "Link has expired" });
+    }
+
+    return res.status(200).json({ msg: "Valid reset code", userId });
+  } catch (err) {
+    console.error("Error in checkPasswordResetDetails:", err.message);
+    return res.status(500).json({ msg: "Internal Server Error" });
+  }
+};
+
+const forgotPasswordChangePassword = async (req, res) => {
+  try {
+    const { userId, code, newPassword } = req.body;
+
+    // Validate input
+    if (!userId || !code || !newPassword) {
+      return res.status(400).json({ msg: "All fields are required" });
+    }
+
+    const resetCode = await Code.findOne({ userId, code });
+    if (!resetCode) {
+      return res.status(404).json({ msg: "Invalid or expired reset link" });
+    }
+
+    if (resetCode.expiresAt < new Date()) {
+      return res.status(400).json({ msg: "Link has expired" });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await User.updateOne({ _id: userId }, { password: hashedPassword });
+
+    await Code.deleteOne({ _id: resetCode._id });
+
+    return res.status(200).json({ msg: "Password changed successfully" });
+  } catch (err) {
+    console.error("Error in forgotPasswordChangePassword:", err.message);
+    return res.status(500).json({ msg: "Internal Server Error" });
+  }
+};
+
 module.exports = {
   redirectGoogle,
   googleCallback,
@@ -309,4 +403,7 @@ module.exports = {
   verifyEmail,
   codeForForgotPassword,
   changePassword,
+  requestPasswordReset,
+  checkPasswordResetDetails,
+  forgotPasswordChangePassword,
 };

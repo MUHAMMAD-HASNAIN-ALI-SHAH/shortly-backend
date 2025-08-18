@@ -1,4 +1,4 @@
-import QRCode from "qrcode";
+const QRCode = require("qrcode");
 const base62Chars =
   "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -29,4 +29,4 @@ function decodeBase62(str) {
   return num;
 }
 
-export { encodeBase62, decodeBase62, generateQrCode };
+module.exports =  { encodeBase62, decodeBase62, generateQrCode };

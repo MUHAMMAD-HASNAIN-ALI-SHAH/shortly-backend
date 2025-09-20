@@ -184,6 +184,18 @@ const verifyEmail = async (req, res) => {
     await User.updateOne({ _id: verification.userId }, { emailVerified: true });
     await Code.deleteOne({ _id: verification._id });
 
+    const user = await User.findOne({ email });
+
+    if (user) {
+      await Plan.create({
+        userId: user._id,
+        planType: "free",
+        urls: 10,
+        qrCodes: 5,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+    }
+
     return res.status(201).json({ msg: "Email verified successfully" });
   } catch (err) {
     console.error("Email Verification Error:", err.message);

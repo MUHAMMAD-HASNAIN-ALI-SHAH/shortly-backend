@@ -91,7 +91,7 @@ const generateQrCodeForLink = async (req, res) => {
 const generateShortUrlForLink = async (req, res) => {
   try {
     const { email } = req.session.user;
-    const { originalUrl, title } = req.body;
+    const { originalUrl, title, password } = req.body;
 
     if (!originalUrl)
       return res.status(400).json({ msg: "Original URL is required" });
@@ -126,15 +126,8 @@ const generateShortUrlForLink = async (req, res) => {
     if (getPlan.urls <= 0)
       return res.status(400).json({ msg: "Short URL limit reached" });
 
-    const latestItem = await Url.findOne().sort({ createdAt: -1 }); // ✅ safer than sorting by _id
-
-    let nextIndex;
-
-    if (!latestItem) {
-      nextIndex = 100;
-    } else {
-      nextIndex = latestItem.index + 1;
-    }
+    const latestItem = await Url.findOne().sort({ createdAt: -1 });
+    let nextIndex = latestItem ? latestItem.index + 1 : 100;
 
     const shortId = encodeBase62(nextIndex);
     const fullShortUrl = `${process.env.FRONTEND_URL}/s/${shortId}`;
@@ -146,6 +139,8 @@ const generateShortUrlForLink = async (req, res) => {
       title: title || "Shortened Link",
       originalUrl,
       shortUrl: fullShortUrl,
+      isPasswordProtected: password ? true : false,
+      password: password || null,
     });
 
     await Plan.updateOne({ userId: getUser._id }, { $inc: { urls: -1 } });
@@ -289,19 +284,48 @@ const redirect = async (req, res) => {
     if (!index) return res.status(400).json({ msg: "Missing Link" });
 
     const getIndex = decodeBase62(index);
-    if (getIndex < 100) {
-      return res.status(400).json({ msg: "Invalid Link" });
-    }
+    if (getIndex < 100) return res.status(400).json({ msg: "Invalid Link" });
 
     const url = await Url.findOne({ index: getIndex, type: "short-url" });
     if (!url) return res.status(404).json({ msg: "URL not found" });
 
-    res.status(200).json({ originalUrl: url.originalUrl });
+    if(!url.isPasswordProtected){
+      url.clicks+=1;
+      await url.save();
+    }
+
+    res.status(200).json({ url });
   } catch (err) {
-    console.error("Error fetching URL code limit:", err);
+    console.error("Error fetching URL:", err);
     res.status(500).json({ msg: "Server error" });
   }
 };
+
+// Verify Password Endpoint
+const verifyPassword = async (req, res) => {
+  try {
+    const { index, password } = req.body;
+    if (!index || !password)
+      return res.status(400).json({ success: false, msg: "Missing data" });
+
+    const getIndex = decodeBase62(index);
+    const url = await Url.findOne({ index: getIndex, type: "short-url" });
+    if (!url) return res.status(404).json({ success: false, msg: "URL not found" });
+
+    if (url.password !== password) {
+      return res.status(401).json({ success: false, msg: "Incorrect password" });
+    }
+
+    url.clicks += 1;
+    await url.save();
+
+    res.status(200).json({ success: true, originalUrl: url.originalUrl });
+  } catch (err) {
+    console.error("Password verification error:", err);
+    res.status(500).json({ success: false, msg: "Server error" });
+  }
+};
+
 
 module.exports = {
   generateQrCodeForLink,
@@ -313,4 +337,5 @@ module.exports = {
   getUserLinks,
   getLimit,
   redirect,
+  verifyPassword
 };

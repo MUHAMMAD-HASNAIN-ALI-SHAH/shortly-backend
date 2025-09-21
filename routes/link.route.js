@@ -10,6 +10,7 @@ const {
   deleteUrlOrQr,
   getLimit,
   redirect,
+  verifyPassword,
 } = require("../controllers/link.controller");
 
 router.post("/qr", generateQrCodeForLink); // Create QR code link
@@ -25,5 +26,7 @@ router.delete("/:id", deleteUrlOrQr); // Delete link (QR or short) by ID
 router.get("/limit", getLimit); // Get QR code limit for user
 
 router.get("/redirect", redirect); // Redirect to original URL by short ID
+
+router.post("/verify-password", verifyPassword); // verify the password
 
 module.exports = router;

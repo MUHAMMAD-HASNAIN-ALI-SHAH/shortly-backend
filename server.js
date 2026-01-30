@@ -5,7 +5,7 @@ const connectDb = require("./config/db");
 const app = express();
 const cors = require("cors");
 const MongoStore = require("connect-mongo");
-const limiter = require("./config/limiter");
+const globalLimiter = require("./config/limiter");
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -36,7 +36,7 @@ app.use(
   })
 );
 
-app.use(limiter);
+// app.use(globalLimiter);
 
 app.get("/", (req, res) => {
   res.send("Hello World!");
@@ -44,6 +44,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/v1/auth", require("./routes/auth.route"));
 app.use("/api/v2/link", require("./routes/link.route"));
+app.use("/api/v4/limit", require("./routes/limit.route"));
 
 const port = process.env.PORT || 8080;
 

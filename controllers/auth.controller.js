@@ -81,9 +81,7 @@ const googleCallback = async (req, res) => {
     }
 
     req.session.user = {
-      username: user.username,
-      email: user.email,
-      picture: user.picture,
+      userId: user._id,
     };
 
     res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
@@ -95,10 +93,11 @@ const googleCallback = async (req, res) => {
 
 const verifyUser = (req, res) => {
   try {
-    if (req.session.user) {
-      return res.status(200).json({ user: req.session.user });
+    const user = req.user;
+    if (user) {
+      return res.status(200).json({ user });
     }
-    return res.status(401).json({ message: "Not authenticated" });
+    return res.status(200).json({ message: "Not authenticated" });
   } catch (error) {
     console.error("Verification Error", error);
     res.status(500).json({ message: "Internal server error" });
@@ -231,9 +230,7 @@ const login = async (req, res) => {
     }
 
     req.session.user = {
-      username: user.username,
-      email: user.email,
-      picture: user.picture,
+      userId: user._id,
     };
 
     return res.status(200).json({ user: req.session.user });
@@ -283,7 +280,7 @@ const codeForForgotPassword = async (req, res) => {
 const changePassword = async (req, res) => {
   try {
     const { password, newPassword } = req.body;
-    const { email } = req.session.user;
+    const { email } = req.user;
 
     const user = await User.findOne({ email });
     if (!user) {

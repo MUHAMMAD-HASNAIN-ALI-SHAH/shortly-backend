@@ -20,7 +20,7 @@ const protectedRoute = require("../middlwares/protected.route");
 router.get("/google", redirectGoogle);
 router.get("/google/callback", googleCallback);
 
-router.get("/verify", verifyUser);
+router.get("/verify", protectedRoute, verifyUser);
 
 router.get("/logout", logout);
 

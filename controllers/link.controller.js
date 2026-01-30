@@ -54,7 +54,7 @@ const generateQrCodeForLink = async (req, res) => {
     if (getPlan.qrCodes <= 0)
       return res.status(400).json({ msg: "QR code limit reached" });
 
-    const latestItem = await Url.findOne().sort({ createdAt: -1 }); // ✅ safer than sorting by _id
+    const latestItem = await Url.findOne().sort({ createdAt: -1 });
 
     let nextIndex;
 

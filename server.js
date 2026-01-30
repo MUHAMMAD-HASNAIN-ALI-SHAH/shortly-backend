@@ -5,6 +5,7 @@ const connectDb = require("./config/db");
 const app = express();
 const cors = require("cors");
 const MongoStore = require("connect-mongo");
+const limiter = require("./config/limiter");
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -34,6 +35,8 @@ app.use(
     },
   })
 );
+
+app.use(limiter);
 
 app.get("/", (req, res) => {
   res.send("Hello World!");

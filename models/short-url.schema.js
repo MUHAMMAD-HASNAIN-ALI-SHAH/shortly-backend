@@ -1,20 +1,16 @@
 const mongoose = require("mongoose");
 
-const urlSchema = new mongoose.Schema(
+const shortUrlSchema = new mongoose.Schema(
   {
-    index: {
-      type: Number,
-      unique: true,
-      required: true,
-    },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    type: {
-      type: String,
-      enum: ["short-url", "qr-code"],
+    index: {
+      type: Number,
+      unique: true,
+      required: true,
     },
     title: {
       type: String,
@@ -26,9 +22,7 @@ const urlSchema = new mongoose.Schema(
     },
     shortUrl: {
       type: String,
-    },
-    qrCodeLink: {
-      type: String,
+      required: true,
     },
     clicks: {
       type: Number,
@@ -45,6 +39,6 @@ const urlSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const Url = mongoose.model("Url", urlSchema);
+const ShortUrl = mongoose.model("Short-Url", shortUrlSchema);
 
-module.exports = Url;
+module.exports = ShortUrl;

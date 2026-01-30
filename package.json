@@ -1,4 +1,14 @@
 {
+  "name": "shortly-backend",
+  "version": "1.0.0",
+  "description": "Backend for Shortly URL Shortener Application",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "author": "MUHAMMAD HASNAIN ALI SHAH",
+  "license": "ISC",
   "dependencies": {
     "axios": "^1.10.0",
     "bcryptjs": "^3.0.2",
@@ -9,6 +19,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
     "express-session": "^1.18.1",
     "ioredis": "^5.6.1",
     "mongoose": "^8.16.3",

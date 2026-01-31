@@ -44,6 +44,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/v1/auth", require("./routes/auth.route"));
 app.use("/api/v2/link", require("./routes/link.route"));
+app.use("/api/v2/short-url", require("./routes/short-url.route"));
 app.use("/api/v3/qr-code", require("./routes/qr-code.route"));
 app.use("/api/v4/limit", require("./routes/limit.route"));
 

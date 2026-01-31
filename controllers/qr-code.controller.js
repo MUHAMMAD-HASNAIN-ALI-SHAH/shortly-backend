@@ -73,6 +73,7 @@ const generateQrCodeForLink = async (req, res) => {
   }
 };
 
+// ---------- Get My QR Codes ----------
 const getMyQrCodes = async (req, res) => {
   try {
     const getUser = req.user;

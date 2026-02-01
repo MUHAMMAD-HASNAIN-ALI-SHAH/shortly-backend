@@ -277,37 +277,6 @@ const codeForForgotPassword = async (req, res) => {
   }
 };
 
-const changePassword = async (req, res) => {
-  try {
-    const { password, newPassword } = req.body;
-    const { email } = req.user;
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ msg: "Email not found" });
-    }
-
-    if (!user.password) {
-      return res.status(400).json({ msg: "Invalid current password" });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ msg: "Invalid current password" });
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    user.password = hashedPassword;
-    await user.save();
-
-    return res.status(200).json({ msg: "Password updated successfully" });
-  } catch (err) {
-    console.error("Change Password Error:", err.message);
-    return res.status(500).json({ msg: "Internal Server Error" });
-  }
-};
-
 const requestPasswordReset = async (req, res) => {
   try {
     const { email } = req.body;
@@ -411,7 +380,6 @@ module.exports = {
   login,
   verifyEmail,
   codeForForgotPassword,
-  changePassword,
   requestPasswordReset,
   checkPasswordResetDetails,
   forgotPasswordChangePassword,

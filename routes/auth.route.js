@@ -9,7 +9,6 @@ const {
   register,
   verifyEmail,
   login,
-  changePassword,
   requestPasswordReset,
   checkPasswordResetDetails,
   forgotPasswordChangePassword,
@@ -30,9 +29,6 @@ router.route("/verify-email").post(verifyEmail);  // email verification route on
 
 // login routes
 router.route("/login").post(login);  // user login route
-
-// routes for changing and resetting password
-router.route("/change-password").post(protectedRoute, changePassword);  // change password route
 
 // forgot password routes
 router.route("/request-password-reset").post(requestPasswordReset);  // request password reset route

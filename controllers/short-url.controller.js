@@ -11,10 +11,10 @@ const generateShortUrlForLink = async (req, res) => {
         const { originalUrl, title, password } = req.body;
 
         if (!originalUrl)
-            return res.status(400).json({ msg: "Original URL is required" });
+            return res.status(400).json({ message: "Original URL is required" });
 
         const getUser = await User.findOne({ email });
-        if (!getUser) return res.status(404).json({ msg: "User not found" });
+        if (!getUser) return res.status(404).json({ message: "User not found" });
 
         let getPlan = await Plan.findOne({ userId: getUser._id });
         if (!getPlan) {
@@ -41,7 +41,7 @@ const generateShortUrlForLink = async (req, res) => {
         }
 
         if (getPlan.urls <= 0)
-            return res.status(400).json({ msg: "Short URL limit reached" });
+            return res.status(400).json({ message: "Short URL limit reached" });
 
         const latestItem = await ShortUrl.findOne().sort({ createdAt: -1 });
         let nextIndex = latestItem ? latestItem.index + 1 : 100;
@@ -64,7 +64,7 @@ const generateShortUrlForLink = async (req, res) => {
         res.status(201).json({ result: newUrl });
     } catch (error) {
         console.error("Short URL error:", error);
-        res.status(500).json({ msg: "Internal Server Error" });
+        res.status(500).json({ message: "Internal Server Error" });
     }
 };
 
@@ -77,7 +77,7 @@ const getUserShortUrls = async (req, res) => {
         res.status(200).json({ shortUrls });
     } catch (err) {
         console.error("Error fetching short URLs:", err);
-        res.status(500).json({ msg: "Server error" });
+        res.status(500).json({ message: "Server error" });
     }
 };
 

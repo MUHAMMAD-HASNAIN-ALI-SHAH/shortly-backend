@@ -13,7 +13,7 @@ const generateQrCodeForLink = async (req, res) => {
     const { originalUrl, title } = req.body;
 
     if (!originalUrl)
-      return res.status(400).json({ msg: "Original URL is required" });
+      return res.status(400).json({ message: "Original URL is required" });
 
     let getPlan = await Plan.findOne({ userId: getUser._id });
     if (!getPlan) {
@@ -40,7 +40,7 @@ const generateQrCodeForLink = async (req, res) => {
     }
 
     if (getPlan.qrCodes <= 0)
-      return res.status(400).json({ msg: "QR code limit reached" });
+      return res.status(400).json({ message: "QR code limit reached" });
 
     const latestItem = await QrCode.findOne().sort({ createdAt: -1 });
 
@@ -69,7 +69,7 @@ const generateQrCodeForLink = async (req, res) => {
     res.status(201).json({ result: newUrl });
   } catch (error) {
     console.error("QR error:", error);
-    res.status(500).json({ msg: "Internal Server Error" });
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -84,7 +84,7 @@ const getMyQrCodes = async (req, res) => {
   }
   catch (error) {
     console.error("Error fetching QR codes:", error);
-    res.status(500).json({ msg: "Internal Server Error" });
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 

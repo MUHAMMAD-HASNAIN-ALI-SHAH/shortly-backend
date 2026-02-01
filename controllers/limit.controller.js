@@ -4,11 +4,11 @@ const getLimit = async (req, res) => {
     try {
         const user = req.user;
         const userId = user._id;
-        if (!userId) return res.status(401).json({ msg: "Unauthorized" });
+        if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
         const plan = await Plan.findOne({ userId });
         if (!plan) {
-            return res.status(404).json({ msg: "Plan not found" });
+            return res.status(404).json({ message: "Plan not found" });
         }
 
         res.status(200).json({
@@ -18,7 +18,7 @@ const getLimit = async (req, res) => {
         });
     } catch (err) {
         console.error("Error fetching URL code limit:", err);
-        res.status(500).json({ msg: "Server error" });
+        res.status(500).json({ message: "Server error" });
     }
 };
 

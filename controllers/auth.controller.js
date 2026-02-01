@@ -117,7 +117,7 @@ const register = async (req, res) => {
     let { username, email, password } = req.body;
 
     if (!username || !email || !password) {
-      return res.status(400).json({ msg: "Please fill in all fields" });
+      return res.status(400).json({ message: "Please fill in all fields" });
     }
 
     email = email.trim().toLowerCase();
@@ -129,7 +129,7 @@ const register = async (req, res) => {
     }
 
     if (existingUser && existingUser.emailVerified) {
-      return res.status(400).json({ msg: "User already exists" });
+      return res.status(400).json({ message: "User already exists" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -155,10 +155,10 @@ const register = async (req, res) => {
       html: sendCode(verificationCode),
     });
 
-    return res.status(201).json({ msg: "User registered successfully" });
+    return res.status(201).json({ message: "User registered successfully" });
   } catch (err) {
     console.error("Register Error:", err.message);
-    return res.status(500).json({ msg: "Internal Server Error" });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -169,7 +169,7 @@ const verifyEmail = async (req, res) => {
     if (!code) {
       return res
         .status(400)
-        .json({ msg: "Please provide a verification code" });
+        .json({ message: "Please provide a verification code" });
     }
 
     const verification = await Code.findOne({ code, email });
@@ -177,7 +177,7 @@ const verifyEmail = async (req, res) => {
     if (!verification) {
       return res
         .status(400)
-        .json({ msg: "Invalid or expired verification code" });
+        .json({ message: "Invalid or expired verification code" });
     }
 
     await User.updateOne({ _id: verification.userId }, { emailVerified: true });
@@ -195,10 +195,10 @@ const verifyEmail = async (req, res) => {
       });
     }
 
-    return res.status(201).json({ msg: "Email verified successfully" });
+    return res.status(201).json({ message: "Email verified successfully" });
   } catch (err) {
     console.error("Email Verification Error:", err.message);
-    return res.status(500).json({ msg: "Internal Server Error" });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -207,7 +207,7 @@ const login = async (req, res) => {
     let { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ msg: "Please fill in all fields" });
+      return res.status(400).json({ message: "Please fill in all fields" });
     }
 
     email = email.trim().toLowerCase();
@@ -217,16 +217,16 @@ const login = async (req, res) => {
     if (!user || !user.emailVerified) {
       return res
         .status(400)
-        .json({ msg: "User does not exist or email not verified" });
+        .json({ message: "User does not exist or email not verified" });
     }
 
     if (!user.password) {
-      return res.status(400).json({ msg: "User signed up with Google" });
+      return res.status(400).json({ message: "User signed up with Google" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(400).json({ msg: "Invalid credentials" });
+      return res.status(400).json({ message: "Invalid credentials" });
     }
 
     req.session.user = {
@@ -236,7 +236,7 @@ const login = async (req, res) => {
     return res.status(200).json({ user: req.session.user });
   } catch (err) {
     console.error("Login Controller Error:", err.message);
-    return res.status(500).json({ msg: "Internal Server Error" });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -245,12 +245,12 @@ const codeForForgotPassword = async (req, res) => {
     const { email } = req.body;
 
     if (!email) {
-      return res.status(400).json({ msg: "Please provide an email" });
+      return res.status(400).json({ message: "Please provide an email" });
     }
 
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(400).json({ msg: "User does not exist" });
+      return res.status(400).json({ message: "User does not exist" });
     }
 
     const verificationCode = Math.floor(1000 + Math.random() * 9000).toString();
@@ -273,7 +273,7 @@ const codeForForgotPassword = async (req, res) => {
     return res.status(200).json();
   } catch (err) {
     console.error("Forgot Password Error:", err.message);
-    return res.status(500).json({ msg: "Internal Server Error" });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -282,10 +282,10 @@ const requestPasswordReset = async (req, res) => {
     const { email } = req.body;
 
     // Validate input
-    if (!email) return res.status(400).json({ msg: "Email is required" });
+    if (!email) return res.status(400).json({ message: "Email is required" });
 
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ msg: "User not found" });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     // Generate 4-digit numeric code
     const code = Math.floor(1000 + Math.random() * 9000).toString();
@@ -309,10 +309,10 @@ const requestPasswordReset = async (req, res) => {
       html: getResetPasswordEmail(user._id, code),
     });
 
-    return res.status(200).json({ msg: "Reset code sent to your email." });
+    return res.status(200).json({ message: "Reset code sent to your email." });
   } catch (err) {
     console.error("Error in requestPasswordReset:", err.message);
-    return res.status(500).json({ msg: "Internal Server Error" });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -322,22 +322,22 @@ const checkPasswordResetDetails = async (req, res) => {
 
     // Validate input
     if (!userId || !code) {
-      return res.status(400).json({ msg: "User ID and code are required" });
+      return res.status(400).json({ message: "User ID and code are required" });
     }
 
     const resetCode = await Code.findOne({ userId, code });
     if (!resetCode) {
-      return res.status(404).json({ msg: "Invalid or expired reset link" });
+      return res.status(404).json({ message: "Invalid or expired reset link" });
     }
 
     if (resetCode.expiresAt < new Date()) {
-      return res.status(400).json({ msg: "Link has expired" });
+      return res.status(400).json({ message: "Link has expired" });
     }
 
-    return res.status(200).json({ msg: "Valid reset code", userId });
+    return res.status(200).json({ message: "Valid reset code", userId });
   } catch (err) {
     console.error("Error in checkPasswordResetDetails:", err.message);
-    return res.status(500).json({ msg: "Internal Server Error" });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -347,16 +347,16 @@ const forgotPasswordChangePassword = async (req, res) => {
 
     // Validate input
     if (!userId || !code || !newPassword) {
-      return res.status(400).json({ msg: "All fields are required" });
+      return res.status(400).json({ message: "All fields are required" });
     }
 
     const resetCode = await Code.findOne({ userId, code });
     if (!resetCode) {
-      return res.status(404).json({ msg: "Invalid or expired reset link" });
+      return res.status(404).json({ message: "Invalid or expired reset link" });
     }
 
     if (resetCode.expiresAt < new Date()) {
-      return res.status(400).json({ msg: "Link has expired" });
+      return res.status(400).json({ message: "Link has expired" });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -364,10 +364,10 @@ const forgotPasswordChangePassword = async (req, res) => {
 
     await Code.deleteOne({ _id: resetCode._id });
 
-    return res.status(200).json({ msg: "Password changed successfully" });
+    return res.status(200).json({ message: "Password changed successfully" });
   } catch (err) {
     console.error("Error in forgotPasswordChangePassword:", err.message);
-    return res.status(500).json({ msg: "Internal Server Error" });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 

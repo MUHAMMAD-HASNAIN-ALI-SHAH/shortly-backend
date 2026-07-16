@@ -11,8 +11,6 @@ const generateShortUrlForLink = async (req, res) => {
         const { email } = req.user;
         const { originalUrl, title, password } = req.body;
 
-        console.log("Request Body:", req.body);
-
         if (!originalUrl)
             return res.status(400).json({ message: "Original URL is required" });
 

@@ -42,23 +42,13 @@ const generateQrCodeForLink = async (req, res) => {
     if (getPlan.qrCodes <= 0)
       return res.status(400).json({ message: "QR code limit reached" });
 
-    const latestItem = await QrCode.findOne().sort({ createdAt: -1 });
-
-    let nextIndex;
-
-    if (!latestItem) {
-      nextIndex = 100;
-    } else {
-      nextIndex = latestItem.index + 1;
-    }
-
     const qrCodeDataURL = await generateQrCode(originalUrl);
     const uploadResult = await cloudinary.uploader.upload(qrCodeDataURL, {
       folder: "shortly/qr-codes",
     });
 
     const newUrl = await QrCode.create({
-      title,
+      title: title || "QR Code",
       originalUrl,
       qrCodeLink: uploadResult.secure_url,
       userId: getUser._id,

@@ -95,7 +95,7 @@ const verifyUser = (req, res) => {
   try {
     const user = req.user;
     if (user) {
-      return res.status(200).json({ user });
+      return res.status(200).json({ username: user.username, email: user.email, picture: user.picture });
     }
     return res.status(200).json({ message: "Not authenticated" });
   } catch (error) {
@@ -233,7 +233,7 @@ const login = async (req, res) => {
       userId: user._id,
     };
 
-    return res.status(200).json({ user: req.session.user });
+    return res.status(200).json({ username: user.username, email: user.email, picture: user.picture });
   } catch (err) {
     console.error("Login Controller Error:", err.message);
     return res.status(500).json({ message: "Internal Server Error" });

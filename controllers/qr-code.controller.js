@@ -1,43 +1,18 @@
-const Plan = require("../models/plan.model");
 const {
   generateQrCode,
 } = require("../config/links");
-const Url = require("../models/url.schema");
 const cloudinary = require("../config/cloudinary");
-const QrCode = require("../models/qr-code.schema");
+const pool = require("../config/database");
 
 // ---------- QR Code Generator ----------
 const generateQrCodeForLink = async (req, res) => {
   try {
     const getUser = req.user;
+    const getPlan = req.plan
     const { originalUrl, title } = req.body;
 
     if (!originalUrl)
       return res.status(400).json({ message: "Original URL is required" });
-
-    let getPlan = await Plan.findOne({ userId: getUser._id });
-    if (!getPlan) {
-      getPlan = await Plan.create({
-        userId: getUser._id,
-        planType: "free",
-        urls: 10,
-        qrCodes: 5,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      });
-    }
-
-    if (getPlan.expiresAt < new Date()) {
-      await Plan.updateOne(
-        { userId: getUser._id },
-        {
-          planType: "free",
-          urls: 10,
-          qrCodes: 5,
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        }
-      );
-      getPlan.qrCodes = 5;
-    }
 
     if (getPlan.qrCodes <= 0)
       return res.status(400).json({ message: "QR code limit reached" });
@@ -47,16 +22,14 @@ const generateQrCodeForLink = async (req, res) => {
       folder: "shortly/qr-codes",
     });
 
-    const newUrl = await QrCode.create({
-      title: title || "QR Code",
-      originalUrl,
-      qrCodeLink: uploadResult.secure_url,
-      userId: getUser._id,
-    });
+    const newUrl = await pool.query(
+      "INSERT INTO qr_codes (user_id, title, original_url, qr_code_link) VALUES ($1, $2, $3, $4) RETURNING *",
+      [getUser.id, title || "Untitled", originalUrl, uploadResult.secure_url]
+    );
 
-    await Plan.updateOne({ userId: getUser._id }, { $inc: { qrCodes: -1 } });
+    await pool.query("UPDATE plans SET qr_codes = qr_codes - 1 WHERE user_id = $1", [getUser.id]);
 
-    res.status(201).json({ result: newUrl });
+    res.status(201).json({ result: newUrl.rows[0] });
   } catch (error) {
     console.error("QR error:", error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -67,10 +40,8 @@ const generateQrCodeForLink = async (req, res) => {
 const getMyQrCodes = async (req, res) => {
   try {
     const getUser = req.user;
-    const qrCodes = await QrCode.find({ userId: getUser._id }).sort({
-      createdAt: -1,
-    });
-    res.status(200).json({ qrCodes });
+    const qrCodes = await pool.query("SELECT * FROM qr_codes WHERE user_id = $1 ORDER BY created_at DESC", [getUser.id]);
+    res.status(200).json({ qrCodes: qrCodes.rows });
   }
   catch (error) {
     console.error("Error fetching QR codes:", error);

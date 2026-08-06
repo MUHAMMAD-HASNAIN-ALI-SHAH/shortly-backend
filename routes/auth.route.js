@@ -9,11 +9,8 @@ const {
   register,
   verifyEmail,
   login,
-  requestPasswordReset,
-  checkPasswordResetDetails,
-  forgotPasswordChangePassword,
 } = require("../controllers/auth.controller");
-const protectedRoute = require("../middlwares/protected.route");
+const protectedRoute = require("../middlwares/protected.middleware");
 
 // google authentication routes
 router.get("/google", redirectGoogle);
@@ -29,10 +26,5 @@ router.route("/verify-email").post(verifyEmail);  // email verification route on
 
 // login routes
 router.route("/login").post(login);  // user login route
-
-// forgot password routes
-router.route("/request-password-reset").post(requestPasswordReset);  // request password reset route
-router.route("/check-password-reset-details").get(checkPasswordResetDetails);  // check password reset details route
-router.route("/forgot-password-change-password").post(forgotPasswordChangePassword);  // forgot password change password route
 
 module.exports = router;

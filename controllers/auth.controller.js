@@ -1,10 +1,9 @@
 const { default: axios } = require("axios");
-const User = require("../models/user.model");
 const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
 const { sendCode, getResetPasswordEmail } = require("../config/email");
-const Code = require("../models/code.schema");
-const Plan = require("../models/plan.model");
+const pool = require("../config/database");
+const jwt = require("jsonwebtoken");
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -61,28 +60,40 @@ const googleCallback = async (req, res) => {
 
     const { email, name, picture, id: googleId } = userRes.data;
 
-    let user = await User.findOne({ email });
+    let user = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+
+    user = user.rows[0];
 
     if (!user) {
-      user = await User.create({
-        email,
-        username: name,
-        picture,
-        googleId,
-        emailVerified: true,
-      });
-      await Plan.create({
-        userId: user._id,
-        planType: "free",
-        urls: 10,
-        qrCodes: 5,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      });
+      const insertResult = await pool.query(
+        "INSERT INTO users (username, email, email_verified, google_id) VALUES ($1, $2, $3, $4) RETURNING *",
+        [name, email, true, googleId]
+      );
+      await pool.query(
+        "INSERT INTO plans (user_id) VALUES ($1)",
+        [insertResult.rows[0].id]
+      );
     }
 
-    req.session.user = {
-      userId: user._id,
-    };
+    user = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    user = user.rows[0];
+
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        username: user.username,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.cookie("access_token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
 
     res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
   } catch (err) {
@@ -105,11 +116,17 @@ const verifyUser = (req, res) => {
 };
 
 const logout = (req, res) => {
-  req.session.destroy((err) => {
-    if (err) return res.status(500).send("Failed to logout");
-    res.clearCookie("connect.sid");
-    res.redirect("/");
-  });
+  try {
+    res.clearCookie("access_token", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+    });
+    return res.status(200).json({ message: "Logged out successfully" });
+  } catch (error) {
+    console.error("Logout Error", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
 };
 
 const register = async (req, res) => {
@@ -122,10 +139,11 @@ const register = async (req, res) => {
 
     email = email.trim().toLowerCase();
 
-    const existingUser = await User.findOne({ email });
+    let existingUser = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    existingUser = existingUser.rows[0];
     if (existingUser && !existingUser.emailVerified) {
-      await User.deleteOne({ _id: existingUser._id });
-      await Code.deleteOne({ userId: existingUser._id });
+      await pool.query("DELETE FROM users WHERE id = $1", [existingUser.id]);
+      await pool.query("DELETE FROM codes WHERE user_id = $1", [existingUser.id]);
     }
 
     if (existingUser && existingUser.emailVerified) {
@@ -134,19 +152,18 @@ const register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = await User.create({
-      username,
-      email,
-      password: hashedPassword,
-    });
+    let newUser = await pool.query(
+      "INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING *",
+      [username, email, hashedPassword]
+    );
+    newUser = newUser.rows[0];
 
     const verificationCode = Math.floor(1000 + Math.random() * 9000).toString();
 
-    await Code.create({
-      userId: newUser._id,
-      code: verificationCode,
-      email,
-    });
+    await pool.query(
+      "INSERT INTO codes (user_id, code, email) VALUES ($1, $2, $3)",
+      [newUser.id, verificationCode, email]
+    );
 
     await transporter.sendMail({
       from: `"Shortly" <${process.env.SMTP_EMAIL}>`,
@@ -172,7 +189,11 @@ const verifyEmail = async (req, res) => {
         .json({ message: "Please provide a verification code" });
     }
 
-    const verification = await Code.findOne({ code, email });
+    let verification = await pool.query(
+      "SELECT * FROM codes WHERE code = $1 AND email = $2",
+      [code, email]
+    );
+    verification = verification.rows[0];
 
     if (!verification) {
       return res
@@ -180,19 +201,18 @@ const verifyEmail = async (req, res) => {
         .json({ message: "Invalid or expired verification code" });
     }
 
-    await User.updateOne({ _id: verification.userId }, { emailVerified: true });
-    await Code.deleteOne({ _id: verification._id });
+    console.log("Verification found:", verification);
 
-    const user = await User.findOne({ email });
+    const updatedUser = await pool.query("UPDATE users SET email_verified = $1 WHERE id = $2 RETURNING *", [true, verification.user_id]);
+    await pool.query("DELETE FROM codes WHERE id = $1", [verification.id]);
+
+    console.log("User updated:", updatedUser.rows[0]);
+
+    let user = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    user = user.rows[0];
 
     if (user) {
-      await Plan.create({
-        userId: user._id,
-        planType: "free",
-        urls: 10,
-        qrCodes: 5,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      });
+      await pool.query("INSERT INTO plans (user_id) VALUES ($1)", [user.id]);
     }
 
     return res.status(201).json({ message: "Email verified successfully" });
@@ -212,9 +232,12 @@ const login = async (req, res) => {
 
     email = email.trim().toLowerCase();
 
-    const user = await User.findOne({ email });
+    let user = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    user = user.rows[0];
 
-    if (!user || !user.emailVerified) {
+    console.log("User found:", user);
+
+    if (!user || !user.email_verified) {
       return res
         .status(400)
         .json({ message: "User does not exist or email not verified" });
@@ -229,144 +252,26 @@ const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    req.session.user = {
-      userId: user._id,
-    };
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        username: user.username,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.cookie("access_token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
 
     return res.status(200).json({ username: user.username, email: user.email, picture: user.picture });
   } catch (err) {
     console.error("Login Controller Error:", err.message);
-    return res.status(500).json({ message: "Internal Server Error" });
-  }
-};
-
-const codeForForgotPassword = async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ message: "Please provide an email" });
-    }
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ message: "User does not exist" });
-    }
-
-    const verificationCode = Math.floor(1000 + Math.random() * 9000).toString();
-
-    await Code.deleteMany({ userId: user._id });
-
-    await Code.create({
-      userId: user._id,
-      code: verificationCode,
-      email,
-    });
-
-    await transporter.sendMail({
-      from: `"Shortly" <${process.env.SMTP_EMAIL}>`,
-      to: email,
-      subject: "Forgot Password Verification Code",
-      html: sendCode(verificationCode),
-    });
-
-    return res.status(200).json();
-  } catch (err) {
-    console.error("Forgot Password Error:", err.message);
-    return res.status(500).json({ message: "Internal Server Error" });
-  }
-};
-
-const requestPasswordReset = async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    // Validate input
-    if (!email) return res.status(400).json({ message: "Email is required" });
-
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    // Generate 4-digit numeric code
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
-
-    // delete previous code if exists
-    await Code.deleteMany({ userId: user._id });
-
-    // Store code and 10-minute expiry
-    await Code.create({
-      userId: user._id,
-      code,
-      email,
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-    });
-
-    // Send email
-    await transporter.sendMail({
-      from: `"Shortly" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "Reset Your Password - Shortly",
-      html: getResetPasswordEmail(user._id, code),
-    });
-
-    return res.status(200).json({ message: "Reset code sent to your email." });
-  } catch (err) {
-    console.error("Error in requestPasswordReset:", err.message);
-    return res.status(500).json({ message: "Internal Server Error" });
-  }
-};
-
-const checkPasswordResetDetails = async (req, res) => {
-  try {
-    const { userId, code } = req.query;
-
-    // Validate input
-    if (!userId || !code) {
-      return res.status(400).json({ message: "User ID and code are required" });
-    }
-
-    const resetCode = await Code.findOne({ userId, code });
-    if (!resetCode) {
-      return res.status(404).json({ message: "Invalid or expired reset link" });
-    }
-
-    if (resetCode.expiresAt < new Date()) {
-      return res.status(400).json({ message: "Link has expired" });
-    }
-
-    return res.status(200).json({ message: "Valid reset code", userId });
-  } catch (err) {
-    console.error("Error in checkPasswordResetDetails:", err.message);
-    return res.status(500).json({ message: "Internal Server Error" });
-  }
-};
-
-const forgotPasswordChangePassword = async (req, res) => {
-  try {
-    const { userId, code, newPassword } = req.body;
-
-    // Validate input
-    if (!userId || !code || !newPassword) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
-
-    const resetCode = await Code.findOne({ userId, code });
-    if (!resetCode) {
-      return res.status(404).json({ message: "Invalid or expired reset link" });
-    }
-
-    if (resetCode.expiresAt < new Date()) {
-      return res.status(400).json({ message: "Link has expired" });
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await User.updateOne({ _id: userId }, { password: hashedPassword });
-
-    await Code.deleteOne({ _id: resetCode._id });
-
-    return res.status(200).json({ message: "Password changed successfully" });
-  } catch (err) {
-    console.error("Error in forgotPasswordChangePassword:", err.message);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -379,8 +284,4 @@ module.exports = {
   register,
   login,
   verifyEmail,
-  codeForForgotPassword,
-  requestPasswordReset,
-  checkPasswordResetDetails,
-  forgotPasswordChangePassword,
 };

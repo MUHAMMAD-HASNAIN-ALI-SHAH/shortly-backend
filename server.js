@@ -1,12 +1,11 @@
 const express = require("express");
-const session = require("express-session");
 require("dotenv").config();
-const connectDb = require("./config/db");
 const app = express();
 const cors = require("cors");
-const MongoStore = require("connect-mongo");
-const {globalLimiter} = require("./config/limiter");
+const { globalLimiter } = require("./config/limiter");
+const cookieParser = require("cookie-parser");
 
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(
@@ -17,24 +16,6 @@ app.use(
 );
 
 app.set("trust proxy", 1);
-
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    store: MongoStore.create({
-      mongoUrl: process.env.MONGODB_URI,
-      collectionName: "sessions",
-    }),
-    cookie: {
-      secure: process.env.NODE_ENV === "production",
-      httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 24 * 60 * 60 * 1000,
-    },
-  })
-);
 
 app.use(globalLimiter);
 
@@ -49,8 +30,6 @@ app.use("/api/v4/limit", require("./routes/limit.route"));
 
 const port = process.env.PORT || 8080;
 
-connectDb().then(() => {
-  app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
-  });
+app.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`);
 });

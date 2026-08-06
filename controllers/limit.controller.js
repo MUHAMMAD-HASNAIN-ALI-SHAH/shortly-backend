@@ -1,20 +1,18 @@
-const Plan = require("../models/plan.model");
+const pool = require("../config/database");
 
 const getLimit = async (req, res) => {
     try {
         const user = req.user;
-        const userId = user._id;
-        if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-        const plan = await Plan.findOne({ userId });
-        if (!plan) {
+        const plan = await pool.query("SELECT * FROM plans WHERE user_id = $1", [user.id,]);
+        if (!plan.rows[0]) {
             return res.status(404).json({ message: "Plan not found" });
         }
 
         res.status(200).json({
-            urls: plan.urls,
-            qrCodes: plan.qrCodes,
-            expiresAt: plan.expiresAt,
+            urls: plan.rows[0].urls,
+            qrCodes: plan.rows[0].qr_codes,
+            expiresAt: plan.rows[0].expires_at,
         });
     } catch (err) {
         console.error("Error fetching URL code limit:", err);

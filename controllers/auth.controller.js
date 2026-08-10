@@ -182,41 +182,26 @@ const register = async (req, res) => {
   }
 };
 
-const verify = async (req, res) => {
+const verifyEmail = async (req, res) => {
   try {
-    let { code, email } = req.body;
+    const { token } = req.body;
+    console.log("Received token for verification:", token);
 
-    if (!code) {
-      return res
-        .status(400)
-        .json({ message: "Please provide a verification code" });
+    if (!token) {
+      return res.status(400).json({ message: "Missing token" });
     }
 
-    let verification = await pool.query(
-      "SELECT * FROM codes WHERE code = $1 AND email = $2",
-      [code, email]
-    );
-    verification = verification.rows[0];
-
-    if (!verification) {
-      return res
-        .status(400)
-        .json({ message: "Invalid or expired verification code" });
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded || !decoded.userId) {
+      return res.status(400).json({ message: "Invalid or expired token" });
     }
 
-    console.log("Verification found:", verification);
-
-    const updatedUser = await pool.query("UPDATE users SET email_verified = $1 WHERE id = $2 RETURNING *", [true, verification.user_id]);
-    await pool.query("DELETE FROM codes WHERE id = $1", [verification.id]);
-
-    console.log("User updated:", updatedUser.rows[0]);
-
-    let user = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
-    user = user.rows[0];
-
-    if (user) {
-      await pool.query("INSERT INTO plans (user_id) VALUES ($1)", [user.id]);
+    const user = await pool.query("SELECT * FROM users WHERE id = $1", [decoded.userId]);
+    if (!user.rows[0]) {
+      return res.status(404).json({ message: "User not found" });
     }
+
+    await pool.query("UPDATE users SET email_verified = true WHERE id = $1", [decoded.userId]);
 
     return res.status(201).json({ message: "Email verified successfully" });
   } catch (err) {
@@ -353,7 +338,7 @@ module.exports = {
   logout,
   register,
   login,
-  verify,
+  verifyEmail,
   getRecoveryLink,
   resetPassword,
 };

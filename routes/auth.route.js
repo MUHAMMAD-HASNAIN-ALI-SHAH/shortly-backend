@@ -7,7 +7,7 @@ const {
   verifyUser,
   logout,
   register,
-  verify,
+  verifyEmail,
   login,
   getRecoveryLink,
   resetPassword,
@@ -24,7 +24,7 @@ router.get("/logout", logout);  // logout route
 
 // registers routes
 router.route("/register").post(register);  // user registration route
-router.route("/verify").post(verify);  // email verification route on registration
+router.route("/verify-email").post(verifyEmail);  // email verification route on registration
 
 // login routes
 router.route("/login").post(login);  // user login route

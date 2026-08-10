@@ -1,7 +1,7 @@
 const { default: axios } = require("axios");
 const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
-const { sendCode, getResetPasswordEmail } = require("../config/email");
+const { verificationLink, getResetPasswordEmail } = require("../config/email");
 const pool = require("../config/database");
 const jwt = require("jsonwebtoken");
 
@@ -141,12 +141,14 @@ const register = async (req, res) => {
 
     let existingUser = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
     existingUser = existingUser.rows[0];
-    if (existingUser && !existingUser.emailVerified) {
+    console.log("Existing user check:", existingUser);
+    if (existingUser && !existingUser.email_verified) {
+      console.log("Deleting unverified user and associated codes");
       await pool.query("DELETE FROM users WHERE id = $1", [existingUser.id]);
       await pool.query("DELETE FROM codes WHERE user_id = $1", [existingUser.id]);
     }
 
-    if (existingUser && existingUser.emailVerified) {
+    if (existingUser && existingUser.email_verified) {
       return res.status(400).json({ message: "User already exists" });
     }
 
@@ -158,18 +160,19 @@ const register = async (req, res) => {
     );
     newUser = newUser.rows[0];
 
-    const verificationCode = Math.floor(1000 + Math.random() * 9000).toString();
-
-    await pool.query(
-      "INSERT INTO codes (user_id, code, email) VALUES ($1, $2, $3)",
-      [newUser.id, verificationCode, email]
+    const verificationToken = jwt.sign(
+      { userId: newUser.id },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
     );
+
+    const verification = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
 
     await transporter.sendMail({
       from: `"Shortly" <${process.env.SMTP_EMAIL}>`,
       to: email,
-      subject: "Your Verification Code",
-      html: sendCode(verificationCode),
+      subject: "Your Verification Link",
+      html: verificationLink(verification),
     });
 
     return res.status(201).json({ message: "User registered successfully" });
@@ -179,7 +182,7 @@ const register = async (req, res) => {
   }
 };
 
-const verifyEmail = async (req, res) => {
+const verify = async (req, res) => {
   try {
     let { code, email } = req.body;
 
@@ -276,6 +279,73 @@ const login = async (req, res) => {
   }
 };
 
+const getRecoveryLink = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: "Please provide an email" });
+    }
+
+    const user = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    if (!user.rows[0]) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const resetPasswordToken = jwt.sign(
+      { userId: user.rows[0].id },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    const resetPasswordLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetPasswordToken}`;
+
+    await transporter.sendMail({
+      from: `"Shortly" <${process.env.SMTP_EMAIL}>`,
+      to: email,
+      subject: "Reset Your Password",
+      html: getResetPasswordEmail(resetPasswordLink),
+    });
+
+    return res.status(200).json();
+  } catch (err) {
+    console.error("Get Recovery Link Error:", err.message);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return res.status(400).json({ message: "Missing token or new password" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded || !decoded.userId) {
+      return res.status(400).json({ message: "Invalid or expired token" });
+    }
+
+    // check jwt expiration
+    if(decoded.exp * 1000 < Date.now()) {
+      return res.status(400).json({ message: "Token has expired" });
+    }
+
+    const user = await pool.query("SELECT * FROM users WHERE id = $1", [decoded.userId]);
+    if (!user.rows[0]) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await pool.query("UPDATE users SET password = $1 WHERE id = $2", [hashedPassword, decoded.userId]);
+
+    return res.status(200).json({ message: "Password reset successfully" });
+  } catch (err) {
+    console.error("Reset Password Error:", err.message);
+    return res.status(500).json({ message: err.message || "Internal Server Error" });
+  }
+};
+
 module.exports = {
   redirectGoogle,
   googleCallback,
@@ -283,5 +353,7 @@ module.exports = {
   logout,
   register,
   login,
-  verifyEmail,
+  verify,
+  getRecoveryLink,
+  resetPassword,
 };

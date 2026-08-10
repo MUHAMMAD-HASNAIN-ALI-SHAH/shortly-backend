@@ -7,8 +7,10 @@ const {
   verifyUser,
   logout,
   register,
-  verifyEmail,
+  verify,
   login,
+  getRecoveryLink,
+  resetPassword,
 } = require("../controllers/auth.controller");
 const protectedRoute = require("../middlwares/protected.middleware");
 
@@ -22,9 +24,13 @@ router.get("/logout", logout);  // logout route
 
 // registers routes
 router.route("/register").post(register);  // user registration route
-router.route("/verify-email").post(verifyEmail);  // email verification route on registration
+router.route("/verify").post(verify);  // email verification route on registration
 
 // login routes
 router.route("/login").post(login);  // user login route
+
+// reset password route
+router.route("/get-recovery-link").post(getRecoveryLink);
+router.route("/reset-password").post(resetPassword);
 
 module.exports = router;

@@ -1,8 +1,8 @@
-const sendCode = (code) => `<!DOCTYPE html>
+const verificationLink = (link) => `<!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Verification Code</title>
+    <title>Verification Link</title>
   </head>
   <body style="font-family: Arial, sans-serif; background-color: #f7f7f7; margin: 0; padding: 0;">
     <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 30px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
@@ -13,9 +13,10 @@ const sendCode = (code) => `<!DOCTYPE html>
       </tr>
       <tr>
         <td style="padding: 30px; text-align: center;">
-          <p style="font-size: 16px; color: #333;">Your verification code is:</p>
-          <h2 style="font-size: 32px; color: #e3342f; margin: 10px 0;">${code}</h2>
-          <p style="color: #555;">This code will expire in 10 minutes.</p>
+          <p style="font-size: 16px; color: #333;">Your verification link is:</p>
+          <a href="${link}" style="display: inline-block; margin-top: 20px; background-color: #e3342f; color: white; padding: 12px 20px; text-decoration: none; font-weight: bold; border-radius: 6px;">
+            Verify Email
+          </a>
         </td>
       </tr>
     </table>
@@ -23,7 +24,7 @@ const sendCode = (code) => `<!DOCTYPE html>
 </html>
 `;
 
-const getResetPasswordEmail = (userId, code) => `<!DOCTYPE html>
+const getResetPasswordEmail = (resetPasswordLink) => `<!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8" />
@@ -39,7 +40,7 @@ const getResetPasswordEmail = (userId, code) => `<!DOCTYPE html>
       <tr>
         <td style="padding: 30px; text-align: center;">
           <p style="font-size: 16px; color: #333;">Your reset password link is:</p>
-          <a href="${process.env.FRONTEND_URL}/reset-password?userId=${userId}&code=${code}" style="display: inline-block; margin-top: 20px; background-color: #e3342f; color: white; padding: 12px 20px; text-decoration: none; font-weight: bold; border-radius: 6px;">
+          <a href="${resetPasswordLink}" style="display: inline-block; margin-top: 20px; background-color: #e3342f; color: white; padding: 12px 20px; text-decoration: none; font-weight: bold; border-radius: 6px;">
             Reset Password
           </a>
         </td>
@@ -49,6 +50,6 @@ const getResetPasswordEmail = (userId, code) => `<!DOCTYPE html>
 </html>`;
 
 module.exports = {
-  sendCode,
+  verificationLink,
   getResetPasswordEmail,
 };

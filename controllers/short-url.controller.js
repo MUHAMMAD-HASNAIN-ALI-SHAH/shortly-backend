@@ -17,7 +17,9 @@ const generateShortUrlForLink = async (req, res) => {
         if (getPlan.urls <= 0)
             return res.status(400).json({ message: "Short URL limit reached" });
 
-        let latestItem = await pool.query("SELECT index_number FROM short_urls WHERE user_id = $1 ORDER BY index_number DESC LIMIT 1", [getUser.id]);
+        let latestItem = await pool.query(
+            "SELECT index_number FROM short_urls ORDER BY index_number DESC LIMIT 1"
+        );
         let nextIndex = latestItem.rows[0]?.index_number ? Number(latestItem.rows[0].index_number) + 1 : 100;
         nextIndex = Number(nextIndex);
 

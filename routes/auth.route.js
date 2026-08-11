@@ -20,7 +20,7 @@ router.get("/google/callback", googleCallback);
 
 // verify and logout routes
 router.get("/verify", protectedRoute, verifyUser);  // verify user route
-router.get("/logout", logout);  // logout route
+router.get("/logout",protectedRoute,  logout);  // logout route
 
 // registers routes
 router.route("/register").post(register);  // user registration route

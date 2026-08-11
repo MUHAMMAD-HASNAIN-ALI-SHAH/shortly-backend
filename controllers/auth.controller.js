@@ -4,6 +4,7 @@ const nodemailer = require("nodemailer");
 const { verificationLink, getResetPasswordEmail } = require("../config/email");
 const pool = require("../config/database");
 const jwt = require("jsonwebtoken");
+const redis = require("../config/redis");
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -58,11 +59,11 @@ const googleCallback = async (req, res) => {
       }
     );
 
-    const { email, name, picture, id: googleId } = userRes.data;
+    const { email, name, googleId } = userRes.data;
 
-    let user = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
-
-    user = user.rows[0];
+    // Always fetch from DB by email (no cache check)
+    let dbUser = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    let user = dbUser.rows[0];
 
     if (!user) {
       const insertResult = await pool.query(
@@ -73,10 +74,28 @@ const googleCallback = async (req, res) => {
         "INSERT INTO plans (user_id) VALUES ($1)",
         [insertResult.rows[0].id]
       );
+
+      dbUser = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+      user = dbUser.rows[0];
     }
 
-    user = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
-    user = user.rows[0];
+    // Set in Redis keyed by userId (no get, just set)
+    await redis.set(
+      `user:${user.id}`,
+      JSON.stringify({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        picture: user.picture,
+        email_verified: user.email_verified,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+        google_id: user.google_id,
+      }),
+      {
+        ex: 7 * 24 * 60 * 60, // 7 days in seconds
+      }
+    );
 
     const token = jwt.sign(
       {
@@ -115,8 +134,13 @@ const verifyUser = (req, res) => {
   }
 };
 
-const logout = (req, res) => {
+const logout = async (req, res) => {
   try {
+    const user = req.user;
+
+    console.log("Logging out user:", user);
+    redis.del(`user:${user.id}`);
+
     res.clearCookie("access_token", {
       httpOnly: true,
       secure: true,
@@ -141,11 +165,12 @@ const register = async (req, res) => {
 
     let existingUser = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
     existingUser = existingUser.rows[0];
-    console.log("Existing user check:", existingUser);
+
     if (existingUser && !existingUser.email_verified) {
-      console.log("Deleting unverified user and associated codes");
       await pool.query("DELETE FROM users WHERE id = $1", [existingUser.id]);
       await pool.query("DELETE FROM codes WHERE user_id = $1", [existingUser.id]);
+      // Clean up any stale Redis entry for the deleted unverified user
+      await redis.del(`user:${existingUser.id}`);
     }
 
     if (existingUser && existingUser.email_verified) {
@@ -159,6 +184,24 @@ const register = async (req, res) => {
       [username, email, hashedPassword]
     );
     newUser = newUser.rows[0];
+
+    // Cache the new user in Redis (same trimmed shape as googleCallback)
+    await redis.set(
+      `user:${newUser.id}`,
+      JSON.stringify({
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+        picture: newUser.picture,
+        email_verified: newUser.email_verified,
+        created_at: newUser.created_at,
+        updated_at: newUser.updated_at,
+        google_id: newUser.google_id,
+      }),
+      {
+        ex: 7 * 24 * 60 * 60, // 7 days in seconds
+      }
+    );
 
     const verificationToken = jwt.sign(
       { userId: newUser.id },
@@ -185,7 +228,6 @@ const register = async (req, res) => {
 const verifyEmail = async (req, res) => {
   try {
     const { token } = req.body;
-    console.log("Received token for verification:", token);
 
     if (!token) {
       return res.status(400).json({ message: "Missing token" });
@@ -223,8 +265,6 @@ const login = async (req, res) => {
     let user = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
     user = user.rows[0];
 
-    console.log("User found:", user);
-
     if (!user || !user.email_verified) {
       return res
         .status(400)
@@ -239,6 +279,24 @@ const login = async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
+
+    // Refresh Redis cache on successful login
+    await redis.set(
+      `user:${user.id}`,
+      JSON.stringify({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        picture: user.picture,
+        email_verified: user.email_verified,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+        google_id: user.google_id,
+      }),
+      {
+        ex: 7 * 24 * 60 * 60, // 7 days in seconds
+      }
+    );
 
     const token = jwt.sign(
       {
@@ -311,7 +369,7 @@ const resetPassword = async (req, res) => {
     }
 
     // check jwt expiration
-    if(decoded.exp * 1000 < Date.now()) {
+    if (decoded.exp * 1000 < Date.now()) {
       return res.status(400).json({ message: "Token has expired" });
     }
 

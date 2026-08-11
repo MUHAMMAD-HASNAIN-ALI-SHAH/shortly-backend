@@ -67,7 +67,6 @@ const redirect = async (req, res) => {
         }
 
         if (url.is_password_protected) {
-            console.log("Password protected URL accessed:", url);
             return res.status(200).json({
                 isPasswordProtected: true,
             });
@@ -76,7 +75,6 @@ const redirect = async (req, res) => {
         url.clicks += 1;
         await pool.query("UPDATE short_urls SET clicks = $1 WHERE index_number = $2", [url.clicks, decodedIndex]);
 
-        console.log()
         return res.status(200).json({
             isPasswordProtected: false,
             originalUrl: url.original_url,

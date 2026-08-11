@@ -3,6 +3,7 @@ const {
     decodeBase62,
 } = require("../config/links");
 const pool = require("../config/database");
+const redis = require("../config/redis");
 
 const generateShortUrlForLink = async (req, res) => {
     try {
@@ -30,6 +31,26 @@ const generateShortUrlForLink = async (req, res) => {
 
         await pool.query("UPDATE plans SET urls = urls - 1 WHERE user_id = $1", [getUser.id]);
 
+        // 1. Update cached short URLs list directly (prepend new one)
+        const urlListKey = `shorturls:${getUser.id}`;
+        let cachedList = await redis.get(urlListKey);
+        cachedList = typeof cachedList === "string" ? JSON.parse(cachedList) : cachedList;
+
+        if (cachedList) {
+            cachedList.unshift(newUrl.rows[0]);
+            await redis.set(urlListKey, JSON.stringify(cachedList), { ex: 24 * 60 * 60 });
+        }
+
+        // 2. Update cached plan directly (decrement urls)
+        const planKey = `plan:${getUser.id}`;
+        let cachedPlan = await redis.get(planKey);
+        cachedPlan = typeof cachedPlan === "string" ? JSON.parse(cachedPlan) : cachedPlan;
+
+        if (cachedPlan) {
+            cachedPlan.urls = cachedPlan.urls - 1;
+            await redis.set(planKey, JSON.stringify(cachedPlan), { ex: 24 * 60 * 60 });
+        }
+
         res.status(201).json({ result: newUrl.rows[0] });
     } catch (error) {
         console.error("Short URL error:", error);
@@ -40,8 +61,25 @@ const generateShortUrlForLink = async (req, res) => {
 const getUserShortUrls = async (req, res) => {
     try {
         const userId = req.user.id;
-        const shortUrls = await pool.query("SELECT * FROM short_urls WHERE user_id = $1 ORDER BY created_at DESC", [userId]);
-        res.status(200).json({ shortUrls: shortUrls.rows });
+        const redisKey = `shorturls:${userId}`;
+
+        // 1. Try Redis first
+        let shortUrls = await redis.get(redisKey);
+        shortUrls = typeof shortUrls === "string" ? JSON.parse(shortUrls) : shortUrls;
+
+        // 2. Cache miss -> fall back to DB
+        if (!shortUrls) {
+            const dbResult = await pool.query(
+                "SELECT * FROM short_urls WHERE user_id = $1 ORDER BY created_at DESC",
+                [userId]
+            );
+            shortUrls = dbResult.rows;
+
+            // 3. Cache it for next time
+            await redis.set(redisKey, JSON.stringify(shortUrls), { ex: 24 * 60 * 60 }); // 1 day TTL
+        }
+
+        res.status(200).json({ shortUrls });
     } catch (err) {
         console.error("Error fetching short URLs:", err);
         res.status(500).json({ message: "Server error" });
@@ -75,6 +113,19 @@ const redirect = async (req, res) => {
         url.clicks += 1;
         await pool.query("UPDATE short_urls SET clicks = $1 WHERE index_number = $2", [url.clicks, decodedIndex]);
 
+        // If this user's short URL list is cached, update the click count in-place
+        const urlListKey = `shorturls:${url.user_id}`;
+        let cachedList = await redis.get(urlListKey);
+        cachedList = typeof cachedList === "string" ? JSON.parse(cachedList) : cachedList;
+
+        if (cachedList) {
+            const itemIndex = cachedList.findIndex((item) => Number(item.index_number) === decodedIndex);
+            if (itemIndex !== -1) {
+                cachedList[itemIndex].clicks = url.clicks;
+                await redis.set(urlListKey, JSON.stringify(cachedList), { ex: 24 * 60 * 60 });
+            }
+        }
+
         return res.status(200).json({
             isPasswordProtected: false,
             originalUrl: url.original_url,
@@ -84,7 +135,6 @@ const redirect = async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 };
-
 
 const verifyPassword = async (req, res) => {
     try {
@@ -111,6 +161,19 @@ const verifyPassword = async (req, res) => {
 
         url.clicks += 1;
         await pool.query("UPDATE short_urls SET clicks = $1 WHERE index_number = $2", [url.clicks, decodedIndex]);
+
+        // If this user's short URL list is cached, update the click count in-place
+        const urlListKey = `shorturls:${url.user_id}`;
+        let cachedList = await redis.get(urlListKey);
+        cachedList = typeof cachedList === "string" ? JSON.parse(cachedList) : cachedList;
+
+        if (cachedList) {
+            const itemIndex = cachedList.findIndex((item) => Number(item.index_number) === decodedIndex);
+            if (itemIndex !== -1) {
+                cachedList[itemIndex].clicks = url.clicks;
+                await redis.set(urlListKey, JSON.stringify(cachedList), { ex: 24 * 60 * 60 });
+            }
+        }
 
         return res.status(200).json({
             originalUrl: url.original_url,
